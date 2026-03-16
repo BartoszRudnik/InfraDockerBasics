@@ -1,4 +1,11 @@
 terraform {
+  cloud {
+    organization = "infra-docker-basics"
+    workspaces {
+      name = "infra-docker-basics"
+    }
+  }
+
   required_version = ">= 1.0"
   required_providers {
     docker = {
@@ -14,9 +21,8 @@ provider "docker" {
 
 module "backend" {
   source = "./modules/docker_app"
-
   app_name    = "backend"
-  app_version = "v0.2.0"
+  app_version = "main"
   app_port    = 3000
   host_port   = 3000
   node_env    = "production"

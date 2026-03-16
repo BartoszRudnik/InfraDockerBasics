@@ -1,6 +1,6 @@
 resource "docker_image" "app" {
-  name         = "${var.app_name}:${var.app_version}"
-  keep_locally = true
+  name         = "ghcr.io/bartoszrudnik/infradockerbasics/backend:${var.app_version}"
+  keep_locally = false
 }
 
 resource "docker_volume" "data" {
