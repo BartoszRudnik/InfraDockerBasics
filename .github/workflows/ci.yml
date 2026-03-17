@@ -15,7 +15,6 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/backend
   AZURE_RG: rg-infra-docker-basics
-  CONTAINER_APP: ca-backend
 
 jobs:
   test:
@@ -38,12 +37,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     outputs:
-      image-tag: ${{ steps.meta.outputs.version }}
-      image-digest: ${{ steps.build.outputs.digest }}
+      image: ${{ steps.image.outputs.name }}
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
@@ -65,7 +62,6 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build and push
-        id: build
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -74,14 +70,49 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            APP_VERSION=${{ github.sha }}
+          build-args: APP_VERSION=${{ github.sha }}
 
-  deploy:
-    name: Deploy to Azure
+      - name: Set image output
+        id: image
+        run: |
+          IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main" | tr '[:upper:]' '[:lower:]')
+          echo "name=$IMAGE" >> $GITHUB_OUTPUT
+
+  deploy-staging:
+    name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: build-and-push
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: staging
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Staging
+        run: |
+          az containerapp update \
+            --name ca-backend-staging \
+            --resource-group ${{ env.AZURE_RG }} \
+            --image ${{ needs.build-and-push.outputs.image }} \
+            --set-env-vars NODE_ENV=staging PORT=3000
+
+      - name: Verify Staging
+        run: |
+          URL=$(az containerapp show \
+            --name ca-backend-staging \
+            --resource-group ${{ env.AZURE_RG }} \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "Staging URL: https://$URL"
+          sleep 15
+          curl -f "https://$URL/health" || exit 1
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
     environment: production
 
     steps:
@@ -90,21 +121,20 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to Container Apps
+      - name: Deploy to Production
         run: |
-          IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main" | tr '[:upper:]' '[:lower:]')
           az containerapp update \
-            --name ${{ env.CONTAINER_APP }} \
+            --name ca-backend \
             --resource-group ${{ env.AZURE_RG }} \
-            --image $IMAGE \
+            --image ${{ needs.build-and-push.outputs.image }} \
             --set-env-vars NODE_ENV=production PORT=3000
 
-      - name: Verify deployment
+      - name: Verify Production
         run: |
           URL=$(az containerapp show \
-            --name ${{ env.CONTAINER_APP }} \
+            --name ca-backend \
             --resource-group ${{ env.AZURE_RG }} \
             --query "properties.configuration.ingress.fqdn" -o tsv)
-          echo "Deployed to: https://$URL"
-          sleep 10
+          echo "Production URL: https://$URL"
+          sleep 15
           curl -f "https://$URL/health" || exit 1

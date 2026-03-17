@@ -65,6 +65,50 @@ resource "azurerm_container_app" "backend" {
   }
 }
 
+resource "azurerm_container_app" "staging" {
+  name                         = "ca-backend-staging"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = azurerm_resource_group.main.name
+  revision_mode                = "Single"
+
+  ingress {
+    external_enabled           = true
+    target_port                = 3000
+    transport                  = "auto"
+    allow_insecure_connections = false
+
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+
+  template {
+    min_replicas = 0
+    max_replicas = 1
+
+    container {
+      name   = "backend"
+      image  = "ghcr.io/bartoszrudnik/infradockerbasics/backend:main"
+      cpu    = 0.25
+      memory = "0.5Gi"
+
+      env {
+        name  = "NODE_ENV"
+        value = "staging"
+      }
+      env {
+        name  = "PORT"
+        value = "3000"
+      }
+    }
+  }
+}
+
+output "staging_url" {
+  value = "https://${azurerm_container_app.staging.latest_revision_fqdn}/health"
+}
+
 output "backend_url" {
   value = "https://${azurerm_container_app.backend.latest_revision_fqdn}/health"
 }
