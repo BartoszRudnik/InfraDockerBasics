@@ -114,6 +114,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-and-push, deploy-staging]
     environment: production
+    env:
+      ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
 
     steps:
       - name: Azure Login
