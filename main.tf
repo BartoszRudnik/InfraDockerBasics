@@ -19,8 +19,12 @@ provider "docker" {
   host = "unix:///var/run/docker.sock"
 }
 
+provider "azurerm" {
+  features {}
+}
+
 module "backend" {
-  source = "./modules/docker_app"
+  source      = "./modules/docker_app"
   app_name    = "backend"
   app_version = "main"
   app_port    = 3000
