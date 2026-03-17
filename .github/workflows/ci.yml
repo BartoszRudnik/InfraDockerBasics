@@ -92,10 +92,11 @@ jobs:
 
       - name: Deploy to Container Apps
         run: |
+          IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main" | tr '[:upper:]' '[:lower:]')
           az containerapp update \
             --name ${{ env.CONTAINER_APP }} \
             --resource-group ${{ env.AZURE_RG }} \
-            --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main \
+            --image $IMAGE \
             --set-env-vars NODE_ENV=production PORT=3000
 
       - name: Verify deployment
